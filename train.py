@@ -17,8 +17,8 @@ lr = 1e-3
 
 PAD_TOKEN_ID = -100
 
-dataset = MaestroDataset(split='train')
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=lambda x: x)
+dataset = MaestroDataset(split='train', num_samples=1_000_000)
+dataloader = DataLoader(dataset, num_workers=8, batch_size=batch_size, shuffle=True, collate_fn=lambda x: x)
 
 model = PianoTransformer(input_dim, num_tokens, d_model=d_model)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -32,8 +32,8 @@ for epoch in range(epochs):
 
     for batch in tqdm(dataloader, desc=f"Epoch {epoch+1}"):
         features_batch, tokens_batch = zip(*batch)
-        features_batch = nn.utils.rnn.pad_sequence(features_batch, batch_first=True)
-        tokens_batch = nn.utils.rnn.pad_sequence(tokens_batch, batch_first=True, padding_value=PAD_TOKEN_ID)
+        features_batch = nn.utils.rnn.pad_sequence(list(features_batch), batch_first=True)
+        tokens_batch = nn.utils.rnn.pad_sequence(list(tokens_batch), batch_first=True, padding_value=PAD_TOKEN_ID)
         features_batch = features_batch.to(device)
         tokens_batch = tokens_batch.to(device)
 
@@ -55,3 +55,5 @@ for epoch in range(epochs):
         total_loss += loss.item()
 
     print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader):.4f}")
+
+    torch.save(model.state_dict(), "pianomodel.pt")
