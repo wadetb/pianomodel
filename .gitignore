@@ -1,13 +1,7 @@
-# Python-generated files
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
-
-# Dataset
+.vscode/
 maestro-v3.0.0/
+maestro-v3.0.0.zip
+output/
+*.pt
+*.pstats

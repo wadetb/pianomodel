@@ -1,36 +1,36 @@
-# Piano Transformer MIDI Transcription
+# Piano Onset CRNN
 
-This project implements a simple transformer-based machine learning model in PyTorch to transcribe piano audio recordings into MIDI-like events. The model is inspired by Google's MT3 architecture, but is designed for real-time, piano-specific note onset detection and MIDI event emission.
+This repo focuses on a compact, piano-only, onset-only CRNN in PyTorch. It trains on MAESTRO audio/MIDI pairs and supports optional preprocessing and a streaming inference simulation.
 
 ## Features
-- Uses the Maestro dataset for paired audio/MIDI training data
-- PyTorch transformer model for sequence-to-sequence transcription
-- Log-mel spectrogram audio features
-- MIDI event vocabulary for piano (note on/off, velocity, time shift)
+- MAESTRO dataset support (v3.x)
+- Log-mel features via `torchaudio`
+- CRNN with separable convs + GRU
+- Optional preprocessing to NPY/NPZ for faster training
+- Streaming inference simulation over WAV files
 
-## Usage
-1. Download the Maestro dataset and place it in `maestro-v3.0.0/`.
-2. Install dependencies:
-	```bash
-	uv sync
-	```
-3. Run training:
-	```bash
-	python train.py
-	```
+## Setup
+1. Install dependencies:
+   ```bash
+   uv sync
+   ```
+2. Download the MAESTRO dataset and note the root directory that contains the CSV and audio/midi files.
 
-## Development State
-- Model, data pipeline, and training loop are implemented
-- MIDI event extraction is a stub and should be improved for full event coverage
-- No evaluation or inference scripts yet
-- No automatic checkpointing or hyperparameter management
+## Training
+```bash
+python piano_onset_crnn.py --data_root /path/to/maestro-v3.0.0 --epochs 50 --batch_size 16 --segment_frames 512 --out ./onset_crnn.pt
+```
 
-## Next Steps
-- Improve MIDI event extraction to handle time shifts and full event vocabulary
-- Add evaluation and inference scripts for real-time transcription
-- Experiment with model architecture and training hyperparameters
-- Integrate with a music app for live piano transcription
+## Preprocessing (Optional)
+```bash
+python piano_onset_crnn.py --data_root /path/to/maestro-v3.0.0 --preprocess --preprocess_splits train,validation --preprocess_format npy
+```
 
-## References
-- [Google Magenta MT3](https://magenta.tensorflow.org/mt3)
-- [Maestro Dataset](https://magenta.tensorflow.org/datasets/maestro)
+## Streaming (Simulated)
+```bash
+python piano_onset_crnn.py --stream_wav input.wav --model ./onset_crnn.pt
+```
+
+## Notes
+- This model predicts onset frames only (no sustain/offset/velocity).
+- The streaming mode uses a hysteresis threshold to reduce spurious triggers.
