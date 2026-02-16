@@ -8,6 +8,7 @@ dependencies = [
     "numpy",
     "pretty-midi>=0.2.10",
     "ruff",
+    "soundfile>=0.13.1",
     "torch",
     "torchaudio>=2.8.0",
 ]
