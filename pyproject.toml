@@ -5,10 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "matplotlib>=3.10.8",
     "numpy",
     "pretty-midi>=0.2.10",
     "ruff",
     "soundfile>=0.13.1",
     "torch",
     "torchaudio>=2.8.0",
+    "tqdm>=4.67.3",
 ]
