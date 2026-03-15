@@ -9,6 +9,7 @@ import numpy as np
 from maestro import (
     FMIN,
     HOP,
+    MIDI_LOW,
     N_FFT,
     N_MELS,
     SR,
@@ -22,31 +23,50 @@ from maestro import (
 
 def save_mel_png(
     mel: np.ndarray,
+    labels: np.ndarray,
     png_path: str,
     sr: int = SR,
     hop: int = HOP,
-    fmin: float = FMIN,
 ) -> None:
-    """Save a mel spectrogram as a PNG image.
+    """Save a mel spectrogram with a note onset timeline as a PNG.
 
     Args:
         mel: Mel spectrogram array of shape (T, n_mels).
+        labels: Onset label array of shape (T, 88).
         png_path: Output path for the PNG file.
         sr: Sample rate used to compute time axis.
         hop: Hop length used to compute time axis.
-        fmin: Minimum frequency for the y-axis label.
     """
-    fig, ax = plt.subplots(figsize=(10, 3))
     duration_s = mel.shape[0] * hop / sr
-    ax.imshow(
+
+    fig, (ax_mel, ax_notes) = plt.subplots(
+        2, 1, figsize=(10, 5), sharex=True,
+        gridspec_kw={"height_ratios": [2, 1]},
+    )
+
+    # -- Mel spectrogram --
+    ax_mel.imshow(
         mel.T,
         aspect="auto",
         origin="lower",
         extent=[0, duration_s, 0, mel.shape[1]],
     )
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Mel bin")
-    ax.set_title("Mel Spectrogram")
+    ax_mel.set_ylabel("Mel bin")
+    ax_mel.set_title("Mel Spectrogram")
+
+    # -- Note onset piano roll --
+    ax_notes.imshow(
+        labels.T,
+        aspect="auto",
+        origin="lower",
+        extent=[0, duration_s, MIDI_LOW, MIDI_LOW + labels.shape[1]],
+        cmap="Greys",
+        interpolation="nearest",
+    )
+    ax_notes.set_xlabel("Time (s)")
+    ax_notes.set_ylabel("MIDI pitch")
+    ax_notes.set_title("Note Onsets")
+
     fig.tight_layout()
     fig.savefig(png_path, dpi=120)
     plt.close(fig)
@@ -104,7 +124,8 @@ def preprocess_split(
 
         if need_png:
             save_mel_png(
-                mel_np, png_path, sr=processor.sample_rate, hop=processor.hop
+                mel_np, labels, png_path,
+                sr=processor.sample_rate, hop=processor.hop,
             )
 
         if i % 10 == 0 or i == len(items):
