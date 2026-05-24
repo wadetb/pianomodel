@@ -210,6 +210,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--weight_decay", type=float, default=0.05)
     p.add_argument("--pos_weight", type=float, default=5.0)
     p.add_argument("--hidden", type=int, default=192)
+    p.add_argument(
+        "--conv_channels",
+        type=str,
+        default="32,64,96",
+        help='Comma-separated 3 ints for SeparableConv2d widths, e.g. "16,32,48".',
+    )
+    p.add_argument(
+        "--temporal_mode",
+        type=str,
+        default="gru",
+        choices=["gru", "none"],
+        help="Temporal layer between conv stack and head: 'gru' (default) or 'none' (drop recurrence).",
+    )
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--out", type=str, default="onset_crnn.pt")
     p.add_argument("--num_workers", type=int, default=0)
@@ -345,11 +358,18 @@ def main() -> None:
         torch.backends.cuda.matmul.allow_tf32 = bool(args.allow_tf32)
         torch.backends.cudnn.allow_tf32 = bool(args.allow_tf32)
 
+    conv_channels = tuple(int(x) for x in args.conv_channels.split(","))
+    if len(conv_channels) != 3:
+        raise SystemExit(
+            f"--conv_channels must be 3 comma-separated ints, got {args.conv_channels!r}"
+        )
     base_model = OnsetCRNN(
         n_mels=N_MELS,
         hidden=args.hidden,
         classes=N_KEYS,
         dropout=args.dropout,
+        conv_channels=conv_channels,
+        temporal_mode=args.temporal_mode,
     ).to(device)
     model = maybe_compile_model(base_model, args, device)
 
@@ -462,6 +482,8 @@ def main() -> None:
             hidden=args.hidden,
             classes=N_KEYS,
             dropout=args.dropout,
+            conv_channels=conv_channels,
+            temporal_mode=args.temporal_mode,
         )
         fused_model.load_state_dict(torch.load(args.out, map_location="cpu"))
         fused_model.eval().fuse_for_eval()

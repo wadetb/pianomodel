@@ -6,9 +6,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "matplotlib>=3.10.8",
+    "mir-eval>=0.8.2",
     "numpy",
     "pretty-midi>=0.2.10",
     "ruff",
+    "sounddevice>=0.5.5",
     "soundfile>=0.13.1",
     "torch",
     "torchaudio>=2.8.0",
