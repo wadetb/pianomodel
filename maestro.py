@@ -325,6 +325,10 @@ class MelSpecProcessor(nn.Module):
             mel = (mel - mean) / std
         elif normalize == "fixed":
             mel = (mel - MEL_GLOBAL_MEAN) / MEL_GLOBAL_STD
+        elif normalize == "streaming":
+            mean = mel.mean()
+            std = mel.std().clamp_min(MEL_GLOBAL_STD * 0.5)
+            mel = (mel - mean) / std
         return mel
 
 
