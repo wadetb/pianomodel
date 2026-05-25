@@ -54,7 +54,7 @@ def main() -> None:
     peak = float(np.abs(mono).max())
     print(f"audio:  rms={rms:.6f}  peak={peak:.4f}  samples={len(mono)}")
 
-    mel = MelSpecProcessor()(torch.from_numpy(mono).unsqueeze(0))
+    mel = MelSpecProcessor()(torch.from_numpy(mono).unsqueeze(0), SR)
     print(f"mel:    shape={tuple(mel.shape)}  min={mel.min():.3f}  max={mel.max():.3f}  mean={mel.mean():.3f}")
 
     if rms > 0.001:
