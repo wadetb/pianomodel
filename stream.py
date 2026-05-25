@@ -287,7 +287,7 @@ class StreamingMelExtractor:
                 self.frames_emitted -= drop // self.hop
 
         with torch.no_grad():
-            mel = self.processor(self.audio_buf, self.input_sr)  # [T_frames, n_mels]
+            mel = self.processor(self.audio_buf, self.input_sr, normalize="fixed")
         n_total = int(mel.shape[0])
         if n_total <= self.frames_emitted:
             return np.zeros((0, self.processor.melspec.n_mels), dtype=np.float32)

@@ -23,6 +23,12 @@ N_KEYS = 88
 MIDI_LOW = 21
 MIDI_HIGH = 108
 
+# Global log1p-mel statistics computed over 50 training pieces (562M values).
+# Used for fixed normalization in the streaming path so that silence doesn't
+# produce extreme values from per-buffer z-normalization.
+MEL_GLOBAL_MEAN = 0.2746
+MEL_GLOBAL_STD = 0.7824
+
 
 @dataclass(frozen=True)
 class MaestroItem:
@@ -291,8 +297,16 @@ class MelSpecProcessor(nn.Module):
             self.resample = None
 
     @torch.no_grad()
-    def forward(self, wav: torch.Tensor, input_sr: int) -> torch.Tensor:
-        """wav: [1, T] mono float32 -> [T_frames, n_mels]."""
+    def forward(
+        self,
+        wav: torch.Tensor,
+        input_sr: int,
+        normalize: str = "per_piece",
+    ) -> torch.Tensor:
+        """wav: [1, T] mono float32 -> [T_frames, n_mels].
+
+        normalize: "per_piece" (default, training) | "fixed" (streaming) | "none".
+        """
         if self._resample_sr != input_sr:
             self._set_input_sr(input_sr)
             self._resample_sr = input_sr
@@ -305,9 +319,13 @@ class MelSpecProcessor(nn.Module):
             raise RuntimeError(f"Unexpected mel shape: {tuple(mel.shape)}")
         mel = torch.log1p(mel)
         mel = mel.transpose(0, 1).contiguous()
-        mean = mel.mean()
-        std = mel.std().clamp_min(1e-5)
-        return (mel - mean) / std
+        if normalize == "per_piece":
+            mean = mel.mean()
+            std = mel.std().clamp_min(1e-5)
+            mel = (mel - mean) / std
+        elif normalize == "fixed":
+            mel = (mel - MEL_GLOBAL_MEAN) / MEL_GLOBAL_STD
+        return mel
 
 
 def load_mono_wav(path: str) -> tuple[torch.Tensor, int]:

@@ -54,8 +54,12 @@ def main() -> None:
     peak = float(np.abs(mono).max())
     print(f"audio:  rms={rms:.6f}  peak={peak:.4f}  samples={len(mono)}")
 
-    mel = MelSpecProcessor()(torch.from_numpy(mono).unsqueeze(0), SR)
-    print(f"mel:    shape={tuple(mel.shape)}  min={mel.min():.3f}  max={mel.max():.3f}  mean={mel.mean():.3f}")
+    proc = MelSpecProcessor()
+    mel_fixed = proc(torch.from_numpy(mono).unsqueeze(0), SR, normalize="fixed")
+    mel_piece = proc(torch.from_numpy(mono).unsqueeze(0), SR, normalize="per_piece")
+    print(f"mel (fixed norm):    shape={tuple(mel_fixed.shape)}  min={mel_fixed.min():.3f}  max={mel_fixed.max():.3f}  mean={mel_fixed.mean():.3f}")
+    print(f"mel (per-piece norm): shape={tuple(mel_piece.shape)}  min={mel_piece.min():.3f}  max={mel_piece.max():.3f}  mean={mel_piece.mean():.3f}")
+    mel = mel_fixed
 
     if rms > 0.001:
         print("WARNING: RMS > 0.001 in a quiet room — mic gain is probably too high.", file=sys.stderr)
@@ -68,7 +72,7 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = OnsetCRNN.from_checkpoint(args.model, map_location=device).to(device).eval()
     with torch.no_grad():
-        mel_t = torch.from_numpy(mel).unsqueeze(0).to(device)
+        mel_t = mel.unsqueeze(0).to(device)
         logits, _ = model(mel_t)
         probs = torch.sigmoid(logits).squeeze(0).cpu().numpy()
 

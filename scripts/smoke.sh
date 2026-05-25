@@ -57,7 +57,7 @@ uv run stream.py \
   --wav output/smoke/smoke_stream_1s.wav \
   --model output/smoke/smoke_train.pt \
   --device cpu \
-  --window_frames 16
+  --chunk_frames 16
 
 echo "[smoke] complete"
 echo "[smoke] artifacts:"
