@@ -27,6 +27,7 @@ Piano onset detection on MAESTRO v3.0.0. A small CRNN predicts per-frame onset p
 - `bash scripts/smoke.sh` — fast end-to-end sanity check (1 epoch, 2 items, 1 batch each, then a 1s-silence stream test). Run this after any non-trivial change to `train.py`, `preprocess.py`, `stream.py`, `model.py`, or `maestro.py`.
 - `uv run python graph.py` — auto-discovers the newest parseable log under `output/` (json or text) and writes `<stem>_graph.png` next to it; pass `--log` to target a specific run.
 - `uv run python stream.py --wav <path> --model output/train.pt` — streaming inference with hidden-state continuity and on/off thresholds.
+- `uv run python mic_check.py [--model <ckpt.pt>]` — record from mic, report audio levels and mel stats; optionally run model to show which keys fire on the recording.
 
 There is no test suite or linter beyond `ruff` being a dependency.
 
@@ -36,6 +37,10 @@ There is no test suite or linter beyond `ruff` being a dependency.
 
 1. `preprocess.py` walks the MAESTRO CSV, runs `MelSpecProcessor` on each WAV, and writes `mel.npy` (`[T, N_MELS]`, log1p+normalized) plus `labels.npy` (`[T, 88]`, onset frames widened by ±1) per piece.
 2. `PreprocessedMaestroDataset` (in `maestro.py`) loads those `.npy` files, slicing a random `segment_frames` window per `__getitem__`. `--preproc_cache mmap` (default) maps from disk; `--preproc_cache ram` preloads everything (only viable for small subsets — full MAESTRO is ~100s of GiB raw audio).
+
+**Mel normalization.** `MelSpecProcessor.forward()` accepts `normalize=` `"per_piece"` (legacy — z-normalize per piece), `"fixed"` (global training-set stats: mean=0.2892, std=0.8170), or `"streaming"` (per-buffer with std clamp). Preprocessed mel.npy files use `--normalize fixed` by default (set in `preprocess.sh`). All inference paths (`predict.py`, `stream.py`, `live.py`) also use `"fixed"` so training and deployment see the same distribution.
+
+**Data augmentation (`augment.py`).** `MelAugment` applies random mel-domain transforms during training: random EQ (per-band gain), additive noise, gain jitter, DC offset, time/frequency masking. Enabled via `--augment` in `train.py`. Applied only to training data; validation uses clean mel.
 
 **Audio constants live in `maestro.py`** and are imported everywhere: `SR=16000`, `HOP=160` (10 ms), `N_FFT=512`, `N_MELS=64`, `N_KEYS=88`, `MIDI_LOW=21`. Changing any of these invalidates the cached `.npy` files — re-run `preprocess.sh --overwrite`.
 

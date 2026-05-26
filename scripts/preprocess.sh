@@ -2,8 +2,9 @@
 uv run python preprocess.py \
   --data_root ./maestro-v3.0.0 \
   --preproc_root ./maestro-preprocessed \
-  --splits train,validation,test
-
+  --splits train,validation,test \
+  --normalize fixed \
+  "$@"
 
 # --limit_per_split 10 \
 # --overwrite

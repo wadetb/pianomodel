@@ -94,7 +94,7 @@ def main() -> None:
 
     processor = MelSpecProcessor(sample_rate=SR, n_fft=N_FFT, hop=HOP, n_mels=N_MELS)
     with torch.no_grad():
-        mel = processor(wav_slice, sr)  # [T, n_mels]
+        mel = processor(wav_slice, sr, normalize="fixed")  # [T, n_mels]
 
     model = OnsetCRNN.from_checkpoint(args.model, map_location=device).to(device).eval()
     with torch.no_grad():

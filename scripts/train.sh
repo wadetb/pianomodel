@@ -13,6 +13,7 @@ uv run python train.py \
   --seed 42 \
   --fused_adamw --allow_tf32 --matmul_precision high \
   --random_item_sampling --train_samples_per_epoch 100000 \
+  --augment \
   --tqdm \
   --stats_json ./output/train.json \
   --out ./output/train.pt

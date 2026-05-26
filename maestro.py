@@ -26,8 +26,8 @@ MIDI_HIGH = 108
 # Global log1p-mel statistics computed over 50 training pieces (562M values).
 # Used for fixed normalization in the streaming path so that silence doesn't
 # produce extreme values from per-buffer z-normalization.
-MEL_GLOBAL_MEAN = 0.2746
-MEL_GLOBAL_STD = 0.7824
+MEL_GLOBAL_MEAN = 0.2892
+MEL_GLOBAL_STD = 0.8170
 
 
 @dataclass(frozen=True)
@@ -148,6 +148,7 @@ class PreprocessedMaestroDataset(Dataset):
         preproc_cache: str = "mmap",
         random_item_sampling: bool = False,
         virtual_size: Optional[int] = None,
+        mel_transform=None,
     ):
         super().__init__()
         if preproc_cache not in {"mmap", "ram"}:
@@ -157,6 +158,7 @@ class PreprocessedMaestroDataset(Dataset):
         self.preproc_root = preproc_root
         self.preproc_cache = preproc_cache
         self.random_item_sampling = random_item_sampling
+        self.mel_transform = mel_transform
         self.virtual_size = (
             int(virtual_size)
             if virtual_size is not None and int(virtual_size) > 0
@@ -252,8 +254,11 @@ class PreprocessedMaestroDataset(Dataset):
                     np.pad(y_arr, ((0, pad), (0, 0)), mode="constant")
                 )
 
+        mel_seg = mel_seg.to(torch.float32).contiguous().clone()
+        if self.mel_transform is not None:
+            mel_seg = self.mel_transform(mel_seg)
         return (
-            mel_seg.to(torch.float32).contiguous().clone(),
+            mel_seg,
             y_seg.to(torch.float32).contiguous().clone(),
         )
 

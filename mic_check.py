@@ -56,11 +56,8 @@ def main() -> None:
 
     proc = MelSpecProcessor()
     wav_t = torch.from_numpy(mono).unsqueeze(0)
-    mel_stream = proc(wav_t, SR, normalize="streaming")
-    mel_piece = proc(wav_t, SR, normalize="per_piece")
-    print(f"mel (streaming norm): shape={tuple(mel_stream.shape)}  min={mel_stream.min():.3f}  max={mel_stream.max():.3f}  mean={mel_stream.mean():.3f}")
-    print(f"mel (per-piece norm): shape={tuple(mel_piece.shape)}  min={mel_piece.min():.3f}  max={mel_piece.max():.3f}  mean={mel_piece.mean():.3f}")
-    mel = mel_stream
+    mel = proc(wav_t, SR, normalize="fixed")
+    print(f"mel (fixed norm): shape={tuple(mel.shape)}  min={mel.min():.3f}  max={mel.max():.3f}  mean={mel.mean():.3f}")
 
     if rms > 0.001:
         print("WARNING: RMS > 0.001 in a quiet room — mic gain is probably too high.", file=sys.stderr)

@@ -268,6 +268,21 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--fuse_eval", action="store_true")
 
+    p.add_argument("--augment", action="store_true", help="Enable mel-domain augmentation on training set.")
+    p.add_argument("--aug_noise_p", type=float, default=0.5)
+    p.add_argument("--aug_noise_snr_lo", type=float, default=-5.0)
+    p.add_argument("--aug_noise_snr_hi", type=float, default=20.0)
+    p.add_argument("--aug_eq_p", type=float, default=0.7)
+    p.add_argument("--aug_eq_max_db", type=float, default=6.0)
+    p.add_argument("--aug_gain_p", type=float, default=0.5)
+    p.add_argument("--aug_gain_range_db", type=float, default=6.0)
+    p.add_argument("--aug_dc_p", type=float, default=0.3)
+    p.add_argument("--aug_dc_max_offset", type=float, default=0.3)
+    p.add_argument("--aug_time_mask_p", type=float, default=0.2)
+    p.add_argument("--aug_time_mask_max_frames", type=int, default=20)
+    p.add_argument("--aug_freq_mask_p", type=float, default=0.2)
+    p.add_argument("--aug_freq_mask_max_bins", type=int, default=8)
+
     p.add_argument("--profile", action="store_true")
     p.add_argument("--profile_out", type=str, default="./profile_train.pstats")
     p.add_argument("--profile_batches", type=int, default=200)
@@ -292,6 +307,25 @@ def main() -> None:
         args.random_item_sampling or train_virtual_size is not None
     )
 
+    mel_transform = None
+    if args.augment:
+        from augment import MelAugment
+        mel_transform = MelAugment(
+            noise_p=args.aug_noise_p,
+            noise_snr_range=(args.aug_noise_snr_lo, args.aug_noise_snr_hi),
+            eq_p=args.aug_eq_p,
+            eq_max_db=args.aug_eq_max_db,
+            gain_p=args.aug_gain_p,
+            gain_range_db=(-args.aug_gain_range_db, args.aug_gain_range_db),
+            dc_p=args.aug_dc_p,
+            dc_max_offset=args.aug_dc_max_offset,
+            time_mask_p=args.aug_time_mask_p,
+            time_mask_max_frames=args.aug_time_mask_max_frames,
+            freq_mask_p=args.aug_freq_mask_p,
+            freq_mask_max_bins=args.aug_freq_mask_max_bins,
+        )
+        print(f"[info] mel augmentation enabled")
+
     train_ds = PreprocessedMaestroDataset(
         data_root=args.data_root,
         split="train",
@@ -301,6 +335,7 @@ def main() -> None:
         preproc_cache=args.preproc_cache,
         random_item_sampling=train_random_item_sampling,
         virtual_size=train_virtual_size,
+        mel_transform=mel_transform,
     )
     val_ds = PreprocessedMaestroDataset(
         data_root=args.data_root,

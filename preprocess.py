@@ -80,6 +80,7 @@ def preprocess_split(
     limit_items: Optional[int] = None,
     viz: bool = False,
     viz_page_seconds: float = 30.0,
+    normalize: str = "per_piece",
 ) -> None:
     items = load_split_items(data_root=data_root, split=split, limit_items=limit_items)
     print(
@@ -111,7 +112,7 @@ def preprocess_split(
 
         wav, sr = load_mono_wav(item.audio_path)
         with np.errstate(all="raise"):
-            mel = processor(wav, sr)
+            mel = processor(wav, sr, normalize=normalize)
         total_frames = mel.shape[0]
         labels = midi_onset_frames(
             item.midi_path,
@@ -172,6 +173,12 @@ def parse_args() -> argparse.Namespace:
         default=30.0,
         help="Seconds per visualization page (default 30).",
     )
+    p.add_argument(
+        "--normalize",
+        choices=["per_piece", "fixed"],
+        default="per_piece",
+        help="Mel normalization mode. 'fixed' uses global training-set stats.",
+    )
     return p.parse_args()
 
 
@@ -190,6 +197,7 @@ def main() -> None:
             limit_items=args.limit_per_split,
             viz=args.viz,
             viz_page_seconds=args.viz_page_seconds,
+            normalize=args.normalize,
         )
 
 
