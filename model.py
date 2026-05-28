@@ -10,6 +10,14 @@ from maestro import N_KEYS, N_MELS
 DEFAULT_CONV_CHANNELS: Tuple[int, int, int] = (32, 64, 96)
 
 
+def _freq_after_convs(n_mels: int, n_blocks: int = 3) -> int:
+    """Frequency dim after n_blocks of (k=3, s=2, p=1) convs."""
+    f = n_mels
+    for _ in range(n_blocks):
+        f = (f - 1) // 2 + 1
+    return f
+
+
 class SeparableConv2d(nn.Module):
     def __init__(
         self,
@@ -62,28 +70,41 @@ class OnsetCRNN(nn.Module):
         dropout: float = 0.1,
         conv_channels: Tuple[int, int, int] = DEFAULT_CONV_CHANNELS,
         temporal_mode: str = "gru",
+        freq_pool: str = "mean",
     ):
         super().__init__()
-        del n_mels  # kept for API compatibility
         if temporal_mode not in ("gru", "none"):
             raise ValueError(f"temporal_mode must be 'gru' or 'none', got {temporal_mode!r}")
+        if freq_pool not in ("mean", "flatten"):
+            raise ValueError(f"freq_pool must be 'mean' or 'flatten', got {freq_pool!r}")
         c1, c2, c3 = conv_channels
         self.conv_channels = (c1, c2, c3)
         self.temporal_mode = temporal_mode
+        self.freq_pool = freq_pool
+        self.n_mels = n_mels
         self.classes = classes
         self.conv1 = SeparableConv2d(1, c1, (3, 3), (1, 2), (1, 1))
         self.conv2 = SeparableConv2d(c1, c2, (3, 3), (1, 2), (1, 1))
         self.conv3 = SeparableConv2d(c2, c3, (3, 3), (1, 2), (1, 1))
         self.dropout = nn.Dropout(dropout)
+        if freq_pool == "flatten":
+            self.freq_dim = _freq_after_convs(n_mels)
+            feat_dim = c3 * self.freq_dim
+        else:  # "mean"
+            self.freq_dim = 1
+            feat_dim = c3
         if temporal_mode == "gru":
-            self.gru = nn.GRU(input_size=c3, hidden_size=hidden, num_layers=1, batch_first=True)
+            self.gru = nn.GRU(input_size=feat_dim, hidden_size=hidden, num_layers=1, batch_first=True)
             head_in = hidden
             self.hidden = hidden
         else:  # "none"
             self.gru = None
-            head_in = c3
+            head_in = feat_dim
             self.hidden = 0
         self.head = nn.Linear(head_in, classes)
+        # Persisted metadata so from_checkpoint can reconstruct the architecture.
+        self.register_buffer("_meta_freq_pool", torch.tensor(0 if freq_pool == "mean" else 1))
+        self.register_buffer("_meta_n_mels", torch.tensor(int(n_mels)))
 
     @classmethod
     def from_checkpoint(
@@ -109,14 +130,23 @@ class OnsetCRNN(nn.Module):
         else:
             hidden = 0
             temporal_mode = "none"
+        # Recover freq_pool + n_mels from persisted metadata (legacy = mean/64).
+        if "_meta_freq_pool" in state:
+            freq_pool = "mean" if int(state["_meta_freq_pool"]) == 0 else "flatten"
+            n_mels = int(state["_meta_n_mels"])
+        else:
+            freq_pool = "mean"
+            n_mels = N_MELS
         model = cls(
+            n_mels=n_mels,
             hidden=hidden,
             classes=classes,
             dropout=dropout,
             conv_channels=(c1, c2, c3),
             temporal_mode=temporal_mode,
+            freq_pool=freq_pool,
         )
-        model.load_state_dict(state)
+        model.load_state_dict(state, strict=False)
         return model
 
     def _conv_stack(self, x: torch.Tensor) -> torch.Tensor:
@@ -124,7 +154,10 @@ class OnsetCRNN(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        x = self.dropout(x)
+        x = self.dropout(x)  # [B, c3, T, F']
+        if self.freq_pool == "flatten":
+            B, C, T, Fp = x.shape
+            return x.permute(0, 2, 1, 3).reshape(B, T, C * Fp).contiguous()  # [B, T, c3*F']
         return x.mean(dim=-1).transpose(1, 2).contiguous()  # [B, T, c3]
 
     def forward(

@@ -224,6 +224,7 @@ def parse_args() -> argparse.Namespace:
         help="Temporal layer between conv stack and head: 'gru' (default) or 'none' (drop recurrence).",
     )
     p.add_argument("--dropout", type=float, default=0.1)
+    p.add_argument("--freq_pool", choices=["mean", "flatten"], default="mean")
     p.add_argument("--out", type=str, default="onset_crnn.pt")
     p.add_argument("--num_workers", type=int, default=0)
     p.add_argument("--seed", type=int, default=42)
@@ -398,13 +399,17 @@ def main() -> None:
         raise SystemExit(
             f"--conv_channels must be 3 comma-separated ints, got {args.conv_channels!r}"
         )
+    sample_mel, _ = train_ds[0]
+    detected_n_mels = int(sample_mel.shape[-1])
+    print(f"[info] detected n_mels={detected_n_mels} freq_pool={args.freq_pool}")
     base_model = OnsetCRNN(
-        n_mels=N_MELS,
+        n_mels=detected_n_mels,
         hidden=args.hidden,
         classes=N_KEYS,
         dropout=args.dropout,
         conv_channels=conv_channels,
         temporal_mode=args.temporal_mode,
+        freq_pool=args.freq_pool,
     ).to(device)
     model = maybe_compile_model(base_model, args, device)
 
@@ -512,15 +517,7 @@ def main() -> None:
     total_seconds = time.perf_counter() - run_start
 
     if args.fuse_eval and os.path.exists(args.out):
-        fused_model = OnsetCRNN(
-            n_mels=N_MELS,
-            hidden=args.hidden,
-            classes=N_KEYS,
-            dropout=args.dropout,
-            conv_channels=conv_channels,
-            temporal_mode=args.temporal_mode,
-        )
-        fused_model.load_state_dict(torch.load(args.out, map_location="cpu"))
+        fused_model = OnsetCRNN.from_checkpoint(args.out, map_location="cpu")
         fused_model.eval().fuse_for_eval()
         torch.save(fused_model.state_dict(), args.out)
         print(f"Exported fused eval checkpoint: {args.out}")

@@ -179,13 +179,24 @@ def parse_args() -> argparse.Namespace:
         default="per_piece",
         help="Mel normalization mode. 'fixed' uses global training-set stats.",
     )
+    p.add_argument("--repr", choices=["mel", "logfreq"], default="mel")
+    p.add_argument("--n_fft", type=int, default=N_FFT)
+    p.add_argument("--n_mels", type=int, default=N_MELS)
+    p.add_argument("--hop", type=int, default=HOP)
+    p.add_argument("--sample_rate", type=int, default=SR)
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     os.makedirs(args.preproc_root, exist_ok=True)
-    processor = MelSpecProcessor(sample_rate=SR, n_fft=N_FFT, hop=HOP, n_mels=N_MELS)
+    processor = MelSpecProcessor(
+        sample_rate=args.sample_rate,
+        n_fft=args.n_fft,
+        hop=args.hop,
+        n_mels=args.n_mels,
+        repr_type=args.repr,
+    )
     splits = [s.strip().lower() for s in args.splits.split(",") if s.strip()]
     for split in splits:
         preprocess_split(

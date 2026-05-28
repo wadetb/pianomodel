@@ -263,6 +263,25 @@ class PreprocessedMaestroDataset(Dataset):
         )
 
 
+def _make_logfreq_fbank(
+    n_fft: int, sample_rate: int, n_bins: int, f_min: float, f_max: float
+) -> torch.Tensor:
+    """Triangular filterbank with log-spaced centers (pitch-aligned, fixed window)."""
+    n_freq = n_fft // 2 + 1
+    fft_freqs = np.linspace(0.0, sample_rate / 2.0, n_freq)
+    centers = np.logspace(np.log10(f_min), np.log10(f_max), n_bins + 2)
+    fb = np.zeros((n_bins, n_freq), dtype=np.float32)
+    for i in range(n_bins):
+        lo, ce, hi = centers[i], centers[i + 1], centers[i + 2]
+        if ce > lo:
+            left = (fft_freqs - lo) / (ce - lo)
+            fb[i] = np.where((fft_freqs >= lo) & (fft_freqs <= ce), left, fb[i])
+        if hi > ce:
+            right = (hi - fft_freqs) / (hi - ce)
+            fb[i] = np.where((fft_freqs > ce) & (fft_freqs <= hi), right, fb[i])
+    return torch.from_numpy(np.clip(fb, 0.0, None))
+
+
 class MelSpecProcessor(nn.Module):
     def __init__(
         self,
@@ -272,25 +291,43 @@ class MelSpecProcessor(nn.Module):
         n_mels: int = N_MELS,
         f_min: float = FMIN,
         f_max: Optional[float] = FMAX,
+        repr_type: str = "mel",
     ):
         super().__init__()
+        if repr_type not in ("mel", "logfreq"):
+            raise ValueError(f"repr_type must be 'mel' or 'logfreq', got {repr_type!r}")
         self.sample_rate = sample_rate
         self.n_fft = n_fft
         self.hop = hop
+        self.repr_type = repr_type
         self.resample: Optional[torchaudio.transforms.Resample] = None
         self._resample_sr: Optional[int] = None
-        self.melspec = torchaudio.transforms.MelSpectrogram(
-            sample_rate=sample_rate,
-            n_fft=n_fft,
-            win_length=n_fft,
-            hop_length=hop,
-            f_min=f_min,
-            f_max=f_max,
-            n_mels=n_mels,
-            power=2.0,
-            center=True,
-            pad_mode="reflect",
-        )
+        if repr_type == "mel":
+            self.melspec = torchaudio.transforms.MelSpectrogram(
+                sample_rate=sample_rate,
+                n_fft=n_fft,
+                win_length=n_fft,
+                hop_length=hop,
+                f_min=f_min,
+                f_max=f_max,
+                n_mels=n_mels,
+                power=2.0,
+                center=True,
+                pad_mode="reflect",
+            )
+        else:  # logfreq
+            self.melspec = torchaudio.transforms.Spectrogram(
+                n_fft=n_fft,
+                win_length=n_fft,
+                hop_length=hop,
+                power=2.0,
+                center=True,
+                pad_mode="reflect",
+            )
+            fb = _make_logfreq_fbank(
+                n_fft, sample_rate, n_mels, f_min, (f_max or sample_rate / 2.0)
+            )
+            self.register_buffer("logfbank", fb)
 
     def _set_input_sr(self, input_sr: int) -> None:
         if input_sr != self.sample_rate:
@@ -318,6 +355,8 @@ class MelSpecProcessor(nn.Module):
         if self.resample is not None:
             wav = self.resample(wav)
         mel = self.melspec(wav)
+        if self.repr_type == "logfreq":
+            mel = torch.matmul(self.logfbank, mel)  # [..., n_bins, T]
         if mel.dim() == 3 and mel.size(0) == 1:
             mel = mel.squeeze(0)
         if mel.dim() != 2:
