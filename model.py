@@ -73,6 +73,10 @@ class OnsetCRNN(nn.Module):
         freq_pool: str = "mean",
         mel_mean: Optional[float] = None,
         mel_std: Optional[float] = None,
+        n_fft: Optional[int] = None,
+        hop: Optional[int] = None,
+        sample_rate: Optional[int] = None,
+        repr_type: Optional[str] = None,
     ):
         super().__init__()
         if temporal_mode not in ("gru", "none"):
@@ -116,6 +120,16 @@ class OnsetCRNN(nn.Module):
             "_meta_mel_std",
             torch.tensor(float("nan") if mel_std is None else float(mel_std)),
         )
+        # Preprocessing config (0 sentinel = "unset; inference falls back to maestro.py defaults").
+        # repr_type encoded as int: 0=mel, 1=logfreq, -1=unset.
+        self.register_buffer("_meta_n_fft",       torch.tensor(0 if n_fft is None else int(n_fft)))
+        self.register_buffer("_meta_hop",         torch.tensor(0 if hop is None else int(hop)))
+        self.register_buffer("_meta_sample_rate", torch.tensor(0 if sample_rate is None else int(sample_rate)))
+        _repr_map = {"mel": 0, "logfreq": 1}
+        self.register_buffer(
+            "_meta_repr_type",
+            torch.tensor(-1 if repr_type is None else _repr_map[repr_type]),
+        )
 
     @classmethod
     def from_checkpoint(
@@ -157,6 +171,11 @@ class OnsetCRNN(nn.Module):
             v = float(state["_meta_mel_std"])
             if v == v:
                 mel_std = v
+        n_fft = int(state["_meta_n_fft"]) if "_meta_n_fft" in state else 0
+        hop = int(state["_meta_hop"]) if "_meta_hop" in state else 0
+        sample_rate = int(state["_meta_sample_rate"]) if "_meta_sample_rate" in state else 0
+        repr_code = int(state["_meta_repr_type"]) if "_meta_repr_type" in state else -1
+        repr_type = {0: "mel", 1: "logfreq"}.get(repr_code)
         model = cls(
             n_mels=n_mels,
             hidden=hidden,
@@ -167,6 +186,10 @@ class OnsetCRNN(nn.Module):
             freq_pool=freq_pool,
             mel_mean=mel_mean,
             mel_std=mel_std,
+            n_fft=n_fft if n_fft > 0 else None,
+            hop=hop if hop > 0 else None,
+            sample_rate=sample_rate if sample_rate > 0 else None,
+            repr_type=repr_type,
         )
         model.load_state_dict(state, strict=False)
         return model
@@ -176,6 +199,23 @@ class OnsetCRNN(nn.Module):
         mean = float(self._meta_mel_mean)
         std = float(self._meta_mel_std)
         return (mean if mean == mean else None, std if std == std else None)
+
+    def get_preproc_config(self) -> dict:
+        """Returns {n_fft, hop, sample_rate, repr_type} from the checkpoint, or {} if unset."""
+        cfg = {}
+        nf = int(self._meta_n_fft)
+        if nf > 0:
+            cfg["n_fft"] = nf
+        h = int(self._meta_hop)
+        if h > 0:
+            cfg["hop"] = h
+        sr = int(self._meta_sample_rate)
+        if sr > 0:
+            cfg["sample_rate"] = sr
+        rc = int(self._meta_repr_type)
+        if rc >= 0:
+            cfg["repr_type"] = {0: "mel", 1: "logfreq"}[rc]
+        return cfg
 
     def _conv_stack(self, x: torch.Tensor) -> torch.Tensor:
         x = x.unsqueeze(1)

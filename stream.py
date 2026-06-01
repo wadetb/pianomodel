@@ -133,7 +133,7 @@ class StreamingOnsetDetector:
 
     def reset(self) -> None:
         self.h: Optional[torch.Tensor] = None
-        self._buffer = np.zeros((0, N_MELS), dtype=np.float32)
+        self._buffer = np.zeros((0, int(self.model.n_mels)), dtype=np.float32)
         self._frames_processed = 0  # mel rows in buffer already fed to GRU
         self.total_frames_in = 0
         self.picker.reset()
@@ -351,11 +351,18 @@ def stream_wav(
         OnsetCRNN.from_checkpoint(model_path, map_location=device_t).to(device_t).eval()
     )
     mel_mean, mel_std = model.get_mel_stats()
+    pre = model.get_preproc_config()
+    if n_fft == N_FFT:        n_fft = pre.get("n_fft", n_fft)
+    if hop == HOP:            hop = pre.get("hop", hop)
+    if sample_rate == SR:     sample_rate = pre.get("sample_rate", sample_rate)
+    if repr_type == "mel":    repr_type = pre.get("repr_type", repr_type)
 
     mel_ext = StreamingMelExtractor(
         sr=sample_rate, n_fft=n_fft, hop=hop, n_mels=model.n_mels,
         repr_type=repr_type, mel_mean=mel_mean, mel_std=mel_std,
     )
+    print(f"[stream] n_mels={model.n_mels} n_fft={n_fft} hop={hop} sr={sample_rate} "
+          f"repr={repr_type} mel_mean={mel_mean} mel_std={mel_std}", file=sys.stderr)
     detector = StreamingOnsetDetector(
         model,
         chunk_frames=chunk_frames,

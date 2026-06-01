@@ -99,17 +99,25 @@ def main() -> None:
 
     model = OnsetCRNN.from_checkpoint(args.model, map_location=device).to(device).eval()
     mel_mean, mel_std = model.get_mel_stats()
+    pre = model.get_preproc_config()
+    # CLI defaults match maestro.py constants; only override with model's stored config
+    # when the user didn't explicitly pass that flag (argparse can't tell — so prefer
+    # model.cfg over default constant, but trust the user if they pass a non-default).
+    n_fft = args.n_fft if args.n_fft != N_FFT else pre.get("n_fft", args.n_fft)
+    hop = args.hop if args.hop != HOP else pre.get("hop", args.hop)
+    sample_rate = args.sample_rate if args.sample_rate != SR else pre.get("sample_rate", args.sample_rate)
+    repr_type = args.repr if args.repr != "mel" else pre.get("repr_type", args.repr)
     proc_kwargs = dict(
-        sample_rate=args.sample_rate, n_fft=args.n_fft, hop=args.hop,
-        n_mels=model.n_mels, repr_type=args.repr,
+        sample_rate=sample_rate, n_fft=n_fft, hop=hop,
+        n_mels=model.n_mels, repr_type=repr_type,
     )
     if mel_mean is not None:
         proc_kwargs["mel_mean"] = mel_mean
     if mel_std is not None:
         proc_kwargs["mel_std"] = mel_std
     processor = MelSpecProcessor(**proc_kwargs)
-    print(f"[predict] processor: n_mels={model.n_mels} n_fft={args.n_fft} repr={args.repr} "
-          f"mel_mean={mel_mean} mel_std={mel_std} freq_pool={model.freq_pool}")
+    print(f"[predict] processor: n_mels={model.n_mels} n_fft={n_fft} hop={hop} sr={sample_rate} "
+          f"repr={repr_type} mel_mean={mel_mean} mel_std={mel_std} freq_pool={model.freq_pool}")
     with torch.no_grad():
         mel = processor(wav_slice, sr, normalize="fixed")  # [T, n_mels]
     with torch.no_grad():

@@ -93,9 +93,19 @@ def main() -> None:
     )
 
     mel_mean, mel_std = model.get_mel_stats()
+    pre = model.get_preproc_config()
+    n_fft = args.n_fft if args.n_fft != N_FFT else pre.get("n_fft", args.n_fft)
+    hop = args.hop if args.hop != HOP else pre.get("hop", args.hop)
+    sample_rate = args.sample_rate if args.sample_rate != SR else pre.get("sample_rate", args.sample_rate)
+    repr_type = args.repr if args.repr != "mel" else pre.get("repr_type", args.repr)
+    print(
+        f"# n_mels={model.n_mels} n_fft={n_fft} hop={hop} sr={sample_rate} "
+        f"repr={repr_type} mel_mean={mel_mean} mel_std={mel_std}",
+        file=sys.stderr,
+    )
     extractor = StreamingMelExtractor(
-        sr=args.sample_rate, n_fft=args.n_fft, hop=args.hop, n_mels=model.n_mels,
-        repr_type=args.repr, mel_mean=mel_mean, mel_std=mel_std,
+        sr=sample_rate, n_fft=n_fft, hop=hop, n_mels=model.n_mels,
+        repr_type=repr_type, mel_mean=mel_mean, mel_std=mel_std,
     )
     detector = StreamingOnsetDetector(
         model,
@@ -104,7 +114,7 @@ def main() -> None:
     )
 
     # Hardware chunk size: at least one mel chunk's worth of input samples.
-    audio_block = int(args.chunk_frames * HOP * args.input_sr / SR)
+    audio_block = int(args.chunk_frames * hop * args.input_sr / sample_rate)
     print(
         f"# input_sr={args.input_sr}  audio_block={audio_block} samples  "
         f"chunk_frames={args.chunk_frames}  threshold={args.threshold}  refractory={args.refractory_frames}",

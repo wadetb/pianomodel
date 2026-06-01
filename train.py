@@ -230,6 +230,13 @@ def parse_args() -> argparse.Namespace:
                         "(predict/stream/live) can configure MelSpecProcessor to match.")
     p.add_argument("--mel_std", type=float, default=None,
                    help="Fixed-norm std used at preprocess. See --mel_mean.")
+    p.add_argument("--preproc_n_fft", type=int, default=None,
+                   help="STFT window used at preprocess. Stored on the checkpoint so inference "
+                        "auto-configures (mel-229 needs 2048).")
+    p.add_argument("--preproc_hop", type=int, default=None, help="Hop used at preprocess.")
+    p.add_argument("--preproc_sample_rate", type=int, default=None, help="Sample rate used at preprocess.")
+    p.add_argument("--preproc_repr", choices=["mel", "logfreq"], default=None,
+                   help="Representation used at preprocess.")
     p.add_argument("--out", type=str, default="onset_crnn.pt")
     p.add_argument("--num_workers", type=int, default=0)
     p.add_argument("--seed", type=int, default=42)
@@ -417,6 +424,10 @@ def main() -> None:
         freq_pool=args.freq_pool,
         mel_mean=args.mel_mean,
         mel_std=args.mel_std,
+        n_fft=args.preproc_n_fft,
+        hop=args.preproc_hop,
+        sample_rate=args.preproc_sample_rate,
+        repr_type=args.preproc_repr,
     ).to(device)
     model = maybe_compile_model(base_model, args, device)
 
