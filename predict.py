@@ -62,6 +62,11 @@ def parse_args() -> argparse.Namespace:
         default=50.0,
         help="Per-pitch refractory window for peak picking.",
     )
+    p.add_argument("--n_fft", type=int, default=N_FFT,
+                   help="STFT window. Set 2048 for mel-229/logfreq-256 models.")
+    p.add_argument("--hop", type=int, default=HOP)
+    p.add_argument("--sample_rate", type=int, default=SR)
+    p.add_argument("--repr", choices=["mel", "logfreq"], default="mel")
     return p.parse_args()
 
 
@@ -92,11 +97,21 @@ def main() -> None:
         f"({wav_slice.shape[-1]} samples) device={device}"
     )
 
-    processor = MelSpecProcessor(sample_rate=SR, n_fft=N_FFT, hop=HOP, n_mels=N_MELS)
+    model = OnsetCRNN.from_checkpoint(args.model, map_location=device).to(device).eval()
+    mel_mean, mel_std = model.get_mel_stats()
+    proc_kwargs = dict(
+        sample_rate=args.sample_rate, n_fft=args.n_fft, hop=args.hop,
+        n_mels=model.n_mels, repr_type=args.repr,
+    )
+    if mel_mean is not None:
+        proc_kwargs["mel_mean"] = mel_mean
+    if mel_std is not None:
+        proc_kwargs["mel_std"] = mel_std
+    processor = MelSpecProcessor(**proc_kwargs)
+    print(f"[predict] processor: n_mels={model.n_mels} n_fft={args.n_fft} repr={args.repr} "
+          f"mel_mean={mel_mean} mel_std={mel_std} freq_pool={model.freq_pool}")
     with torch.no_grad():
         mel = processor(wav_slice, sr, normalize="fixed")  # [T, n_mels]
-
-    model = OnsetCRNN.from_checkpoint(args.model, map_location=device).to(device).eval()
     with torch.no_grad():
         x = mel.unsqueeze(0).to(device)
         logits, _ = model(x)

@@ -71,6 +71,8 @@ class OnsetCRNN(nn.Module):
         conv_channels: Tuple[int, int, int] = DEFAULT_CONV_CHANNELS,
         temporal_mode: str = "gru",
         freq_pool: str = "mean",
+        mel_mean: Optional[float] = None,
+        mel_std: Optional[float] = None,
     ):
         super().__init__()
         if temporal_mode not in ("gru", "none"):
@@ -105,6 +107,15 @@ class OnsetCRNN(nn.Module):
         # Persisted metadata so from_checkpoint can reconstruct the architecture.
         self.register_buffer("_meta_freq_pool", torch.tensor(0 if freq_pool == "mean" else 1))
         self.register_buffer("_meta_n_mels", torch.tensor(int(n_mels)))
+        # NaN sentinels = "no per-rep stats stored; inference should use MelSpecProcessor defaults".
+        self.register_buffer(
+            "_meta_mel_mean",
+            torch.tensor(float("nan") if mel_mean is None else float(mel_mean)),
+        )
+        self.register_buffer(
+            "_meta_mel_std",
+            torch.tensor(float("nan") if mel_std is None else float(mel_std)),
+        )
 
     @classmethod
     def from_checkpoint(
@@ -137,6 +148,15 @@ class OnsetCRNN(nn.Module):
         else:
             freq_pool = "mean"
             n_mels = N_MELS
+        mel_mean = mel_std = None
+        if "_meta_mel_mean" in state:
+            v = float(state["_meta_mel_mean"])
+            if v == v:  # not NaN
+                mel_mean = v
+        if "_meta_mel_std" in state:
+            v = float(state["_meta_mel_std"])
+            if v == v:
+                mel_std = v
         model = cls(
             n_mels=n_mels,
             hidden=hidden,
@@ -145,9 +165,17 @@ class OnsetCRNN(nn.Module):
             conv_channels=(c1, c2, c3),
             temporal_mode=temporal_mode,
             freq_pool=freq_pool,
+            mel_mean=mel_mean,
+            mel_std=mel_std,
         )
         model.load_state_dict(state, strict=False)
         return model
+
+    def get_mel_stats(self) -> Tuple[Optional[float], Optional[float]]:
+        """Returns (mel_mean, mel_std) stored in the checkpoint, or (None, None) if unset."""
+        mean = float(self._meta_mel_mean)
+        std = float(self._meta_mel_std)
+        return (mean if mean == mean else None, std if std == std else None)
 
     def _conv_stack(self, x: torch.Tensor) -> torch.Tensor:
         x = x.unsqueeze(1)

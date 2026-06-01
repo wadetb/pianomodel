@@ -2,8 +2,7 @@ __pycache__/
 .vscode/
 maestro-v3.0.0/
 maestro-v3.0.0.zip
-maestro-preprocessed/
-maestro-preproc-repr/
+maestro-preproc*/
 output/
 *.pt
 *.pstats

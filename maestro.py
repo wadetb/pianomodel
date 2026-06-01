@@ -292,6 +292,8 @@ class MelSpecProcessor(nn.Module):
         f_min: float = FMIN,
         f_max: Optional[float] = FMAX,
         repr_type: str = "mel",
+        mel_mean: float = MEL_GLOBAL_MEAN,
+        mel_std: float = MEL_GLOBAL_STD,
     ):
         super().__init__()
         if repr_type not in ("mel", "logfreq"):
@@ -300,6 +302,8 @@ class MelSpecProcessor(nn.Module):
         self.n_fft = n_fft
         self.hop = hop
         self.repr_type = repr_type
+        self.mel_mean = float(mel_mean)
+        self.mel_std = float(mel_std)
         self.resample: Optional[torchaudio.transforms.Resample] = None
         self._resample_sr: Optional[int] = None
         if repr_type == "mel":
@@ -368,10 +372,10 @@ class MelSpecProcessor(nn.Module):
             std = mel.std().clamp_min(1e-5)
             mel = (mel - mean) / std
         elif normalize == "fixed":
-            mel = (mel - MEL_GLOBAL_MEAN) / MEL_GLOBAL_STD
+            mel = (mel - self.mel_mean) / self.mel_std
         elif normalize == "streaming":
             mean = mel.mean()
-            std = mel.std().clamp_min(MEL_GLOBAL_STD * 0.5)
+            std = mel.std().clamp_min(self.mel_std * 0.5)
             mel = (mel - mean) / std
         return mel
 

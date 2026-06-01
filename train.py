@@ -225,6 +225,11 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--freq_pool", choices=["mean", "flatten"], default="mean")
+    p.add_argument("--mel_mean", type=float, default=None,
+                   help="Fixed-norm mean used at preprocess. Stored on the checkpoint so inference "
+                        "(predict/stream/live) can configure MelSpecProcessor to match.")
+    p.add_argument("--mel_std", type=float, default=None,
+                   help="Fixed-norm std used at preprocess. See --mel_mean.")
     p.add_argument("--out", type=str, default="onset_crnn.pt")
     p.add_argument("--num_workers", type=int, default=0)
     p.add_argument("--seed", type=int, default=42)
@@ -410,6 +415,8 @@ def main() -> None:
         conv_channels=conv_channels,
         temporal_mode=args.temporal_mode,
         freq_pool=args.freq_pool,
+        mel_mean=args.mel_mean,
+        mel_std=args.mel_std,
     ).to(device)
     model = maybe_compile_model(base_model, args, device)
 

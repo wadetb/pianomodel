@@ -27,7 +27,7 @@ except OSError as exc:  # PortAudio missing
         f"  {exc}"
     )
 
-from maestro import HOP, MIDI_LOW, N_KEYS, SR
+from maestro import HOP, MIDI_LOW, N_FFT, N_KEYS, SR
 from model import OnsetCRNN
 from stream import (
     StreamingMelExtractor,
@@ -65,6 +65,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print available audio devices and exit.",
     )
+    p.add_argument("--n_fft", type=int, default=N_FFT,
+                   help="STFT window. Set 2048 for mel-229/logfreq-256 models.")
+    p.add_argument("--hop", type=int, default=HOP)
+    p.add_argument("--sample_rate", type=int, default=SR)
+    p.add_argument("--repr", choices=["mel", "logfreq"], default="mel")
     return p.parse_args()
 
 
@@ -87,7 +92,11 @@ def main() -> None:
         file=sys.stderr,
     )
 
-    extractor = StreamingMelExtractor(sr=SR)
+    mel_mean, mel_std = model.get_mel_stats()
+    extractor = StreamingMelExtractor(
+        sr=args.sample_rate, n_fft=args.n_fft, hop=args.hop, n_mels=model.n_mels,
+        repr_type=args.repr, mel_mean=mel_mean, mel_std=mel_std,
+    )
     detector = StreamingOnsetDetector(
         model,
         threshold=args.threshold,

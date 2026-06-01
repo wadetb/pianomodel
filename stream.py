@@ -248,8 +248,16 @@ class StreamingMelExtractor:
         hop: int = HOP,
         n_mels: int = N_MELS,
         buffer_seconds: float = 4.0,
+        repr_type: str = "mel",
+        mel_mean: Optional[float] = None,
+        mel_std: Optional[float] = None,
     ):
-        self.processor = MelSpecProcessor(sample_rate=sr, n_fft=n_fft, hop=hop, n_mels=n_mels)
+        proc_kwargs = dict(sample_rate=sr, n_fft=n_fft, hop=hop, n_mels=n_mels, repr_type=repr_type)
+        if mel_mean is not None:
+            proc_kwargs["mel_mean"] = mel_mean
+        if mel_std is not None:
+            proc_kwargs["mel_std"] = mel_std
+        self.processor = MelSpecProcessor(**proc_kwargs)
         self.sr = sr
         self.hop = hop
         self.n_fft = n_fft
@@ -327,6 +335,10 @@ def stream_wav(
     refractory_frames: int = 5,
     device: Optional[str] = None,
     show_pianoroll: bool = True,
+    n_fft: int = N_FFT,
+    hop: int = HOP,
+    sample_rate: int = SR,
+    repr_type: str = "mel",
 ) -> List[Tuple[float, int]]:
     """End-to-end streaming over a WAV file, useful for testing without a mic.
 
@@ -338,8 +350,12 @@ def stream_wav(
     model = (
         OnsetCRNN.from_checkpoint(model_path, map_location=device_t).to(device_t).eval()
     )
+    mel_mean, mel_std = model.get_mel_stats()
 
-    mel_ext = StreamingMelExtractor()
+    mel_ext = StreamingMelExtractor(
+        sr=sample_rate, n_fft=n_fft, hop=hop, n_mels=model.n_mels,
+        repr_type=repr_type, mel_mean=mel_mean, mel_std=mel_std,
+    )
     detector = StreamingOnsetDetector(
         model,
         chunk_frames=chunk_frames,
@@ -395,6 +411,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--device", default=None)
     p.add_argument("--no_pianoroll", action="store_true",
                    help="Suppress the ASCII pianoroll output; just count events.")
+    p.add_argument("--n_fft", type=int, default=N_FFT,
+                   help="STFT window. Set 2048 for mel-229/logfreq-256 models.")
+    p.add_argument("--hop", type=int, default=HOP)
+    p.add_argument("--sample_rate", type=int, default=SR)
+    p.add_argument("--repr", choices=["mel", "logfreq"], default="mel")
     return p.parse_args()
 
 
@@ -408,6 +429,10 @@ def main() -> None:
         refractory_frames=args.refractory_frames,
         device=args.device,
         show_pianoroll=not args.no_pianoroll,
+        n_fft=args.n_fft,
+        hop=args.hop,
+        sample_rate=args.sample_rate,
+        repr_type=args.repr,
     )
     print(f"# detected {len(events)} onsets")
     for t, p in events[:10]:

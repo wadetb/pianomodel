@@ -184,19 +184,29 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n_mels", type=int, default=N_MELS)
     p.add_argument("--hop", type=int, default=HOP)
     p.add_argument("--sample_rate", type=int, default=SR)
+    p.add_argument("--mel_mean", type=float, default=None,
+                   help="Fixed-norm mean for this representation. Default keeps MelSpecProcessor "
+                        "fallback (mel-64 globals). Required when --normalize fixed for non-mel64 reps.")
+    p.add_argument("--mel_std", type=float, default=None,
+                   help="Fixed-norm std for this representation. See --mel_mean.")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     os.makedirs(args.preproc_root, exist_ok=True)
-    processor = MelSpecProcessor(
+    proc_kwargs = dict(
         sample_rate=args.sample_rate,
         n_fft=args.n_fft,
         hop=args.hop,
         n_mels=args.n_mels,
         repr_type=args.repr,
     )
+    if args.mel_mean is not None:
+        proc_kwargs["mel_mean"] = args.mel_mean
+    if args.mel_std is not None:
+        proc_kwargs["mel_std"] = args.mel_std
+    processor = MelSpecProcessor(**proc_kwargs)
     splits = [s.strip().lower() for s in args.splits.split(",") if s.strip()]
     for split in splits:
         preprocess_split(
