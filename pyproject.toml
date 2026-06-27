@@ -8,6 +8,8 @@ dependencies = [
     "matplotlib>=3.10.8",
     "mir-eval>=0.8.2",
     "numpy",
+    "onnx>=1.22.0",
+    "onnxruntime>=1.18,<1.21",
     "pretty-midi>=0.2.10",
     "ruff",
     "sounddevice>=0.5.5",
